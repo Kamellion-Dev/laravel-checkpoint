@@ -15,6 +15,25 @@ Laravel will auto-discover the service provider, so the commands become availabl
 ```bash
 php artisan checkpoint:save
 php artisan checkpoint:load
+```
+
+Saved checkpoints are stored in the project's `.dev-checkpoint` folder.
+
+Load a specific checkpoint folder by name:
+
+```bash
+php artisan checkpoint:load --name=your_checkpoint_folder
+```
+
+Load a checkpoint and re-run migrations when needed:
+
+```bash
+php artisan checkpoint:load --migrate
+```
+
+Clear all saved checkpoints:
+
+```bash
 php artisan checkpoint:clear
 ```
 
