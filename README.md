@@ -2,6 +2,18 @@
 
 Simple Laravel development checkpoints for your database and local storage disks.
 
+## Why use it?
+
+When you are working on a long backend flow, the slowest part is often getting the app back to a known state.
+
+Instead of reseeding, rebuilding data manually, or replaying the same steps over and over, you can:
+
+- save a checkpoint after setup is complete
+- try a new branch of logic
+- load the checkpoint and start again immediately
+
+Think of it like save points for your Laravel development environment.
+
 ## Quick start
 
 Install the package:
@@ -18,6 +30,22 @@ php artisan checkpoint:load
 ```
 
 Saved checkpoints are stored in the project's `.dev-checkpoint` folder.
+
+Save a checkpoint with a comment:
+
+```bash
+php artisan checkpoint:save --comment="amazing starter point"
+```
+
+This saves the comment as a `.comment` file inside that checkpoint folder and shows it in `checkpoint:list`.
+
+List recent checkpoints:
+
+```bash
+php artisan checkpoint:list
+```
+
+The list shows the display label and the actual folder name you can pass to `checkpoint:load --name=...`.
 
 Load a specific checkpoint folder by name:
 
@@ -37,6 +65,16 @@ Clear all saved checkpoints:
 php artisan checkpoint:clear
 ```
 
+Get command help:
+
+```bash
+php artisan help checkpoint:save
+php artisan help checkpoint:list
+php artisan help checkpoint:load
+php artisan help checkpoint:clear
+php artisan help checkpoint:help
+```
+
 ## Package structure
 
 This package keeps its classes inside `src/` and registers them through a service provider instead of copying files into the host application's `app/` directory.
@@ -44,6 +82,8 @@ This package keeps its classes inside `src/` and registers them through a servic
 - `src/commands/CheckpointSave.php`
 - `src/commands/CheckpointLoad.php`
 - `src/commands/CheckpointClear.php`
+- `src/commands/CheckpointHelp.php`
+- `src/commands/CheckpointList.php`
 - `src/services/DatabaseCheckpointService.php`
 - `src/LaravelCheckpointServiceProvider.php`
 
@@ -61,7 +101,7 @@ git tag v1.0.0
 git push origin main --tags
 ```
 
-5. On Packagist, click `Update` or enable the GitHub hook so new tags are indexed automatically.
+1. On Packagist, click `Update` or enable the GitHub hook so new tags are indexed automatically.
 
 ## Notes
 

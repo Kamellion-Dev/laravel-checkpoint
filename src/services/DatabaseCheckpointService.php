@@ -12,10 +12,11 @@ use Symfony\Component\Finder\SplFileInfo;
 
 class DatabaseCheckpointService
 {
-    public function save(): array
+    public function save(?string $comment = null): array
     {
         $checkpoint = $this->createCheckpointDirectory();
         $metadata = $this->checkpointMetadata($checkpoint['name']);
+        $normalizedComment = $this->normalizeComment($comment);
 
         $artifactPath = match ($metadata['driver']) {
             'mysql', 'mariadb' => $this->saveMysqlCheckpoint($checkpoint['path'], $metadata),
@@ -24,6 +25,7 @@ class DatabaseCheckpointService
         };
 
         $filesystems = $this->saveFilesystemCheckpoint($checkpoint['path']);
+        $commentFile = $this->writeCommentFile($checkpoint['path'], $normalizedComment);
 
         File::put(
             $checkpoint['path'].DIRECTORY_SEPARATOR.'metadata.json',
@@ -31,6 +33,8 @@ class DatabaseCheckpointService
                 ...$metadata,
                 'artifact' => basename($artifactPath),
                 'filesystems' => $filesystems,
+                'comment' => $normalizedComment,
+                'comment_file' => $commentFile,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)
         );
 
@@ -39,6 +43,8 @@ class DatabaseCheckpointService
             'path' => $checkpoint['path'],
             'artifact' => $artifactPath,
             'filesystems' => $filesystems,
+            'comment' => $normalizedComment,
+            'comment_file' => $commentFile,
             'size_bytes' => $this->directorySize($checkpoint['path']),
         ];
     }
@@ -99,7 +105,7 @@ class DatabaseCheckpointService
 
     public function latestCheckpointName(): ?string
     {
-        $directories = collect(File::directories($this->rootPath()))
+        $directories = collect($this->checkpointDirectories())
             ->map(static fn (string $path): string => basename($path))
             ->sortDesc()
             ->values();
@@ -107,9 +113,45 @@ class DatabaseCheckpointService
         return $directories->first();
     }
 
+    /**
+     * @return list<array{name: string, path: string, comment: ?string, display_name: string, created_at: ?string}>
+     */
+    public function listCheckpoints(): array
+    {
+        return collect($this->checkpointDirectories())
+            ->sortDesc()
+            ->values()
+            ->map(function (string $path): array {
+                $name = basename($path);
+                $metadata = $this->safeReadMetadata($path);
+                $comment = $this->commentFromMetadata($metadata) ?? $this->commentFromDirectory($path);
+
+                return [
+                    'name' => $name,
+                    'path' => $path,
+                    'comment' => $comment,
+                    'display_name' => $comment ?? $name,
+                    'created_at' => is_array($metadata) ? ($metadata['created_at'] ?? null) : null,
+                ];
+            })
+            ->all();
+    }
+
     public function rootPath(): string
     {
         return base_path('.dev-checkpoint');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function checkpointDirectories(): array
+    {
+        if (! File::isDirectory($this->rootPath())) {
+            return [];
+        }
+
+        return File::directories($this->rootPath());
     }
 
     private function createCheckpointDirectory(): array
@@ -151,6 +193,74 @@ class DatabaseCheckpointService
             'database' => (string) ($config['database'] ?? ''),
             'created_at' => now()->toIso8601String(),
         ];
+    }
+
+    private function normalizeComment(?string $comment): ?string
+    {
+        if ($comment === null) {
+            return null;
+        }
+
+        $normalized = trim(preg_replace('/\s+/', ' ', $comment) ?? '');
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private function writeCommentFile(string $checkpointPath, ?string $comment): ?string
+    {
+        if ($comment === null) {
+            return null;
+        }
+
+        $fileName = $this->commentFileName($comment);
+        File::put($checkpointPath.DIRECTORY_SEPARATOR.$fileName, $comment.PHP_EOL);
+
+        return $fileName;
+    }
+
+    private function commentFileName(string $comment): string
+    {
+        $sanitized = preg_replace('/[\\\\\/:*?"<>|]/', '-', $comment) ?? $comment;
+        $sanitized = trim($sanitized, ". \t\n\r\0\x0B");
+
+        if ($sanitized === '') {
+            $sanitized = 'checkpoint';
+        }
+
+        return $sanitized.'.comment';
+    }
+
+    private function safeReadMetadata(string $checkpointPath): ?array
+    {
+        try {
+            return $this->readMetadata($checkpointPath);
+        } catch (RuntimeException | FileNotFoundException | JsonException) {
+            return null;
+        }
+    }
+
+    private function commentFromMetadata(?array $metadata): ?string
+    {
+        if (! is_array($metadata)) {
+            return null;
+        }
+
+        $comment = $metadata['comment'] ?? null;
+
+        return is_string($comment) && trim($comment) !== '' ? $comment : null;
+    }
+
+    private function commentFromDirectory(string $checkpointPath): ?string
+    {
+        $commentFiles = File::glob($checkpointPath.DIRECTORY_SEPARATOR.'*.comment');
+
+        if ($commentFiles === false || $commentFiles === []) {
+            return null;
+        }
+
+        $commentFile = basename($commentFiles[0]);
+
+        return pathinfo($commentFile, PATHINFO_FILENAME);
     }
 
     private function saveMysqlCheckpoint(string $checkpointPath, array $metadata): string

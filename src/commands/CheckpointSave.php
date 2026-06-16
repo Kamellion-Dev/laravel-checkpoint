@@ -8,7 +8,8 @@ use Throwable;
 
 class CheckpointSave extends Command
 {
-    protected $signature = 'checkpoint:save';
+    protected $signature = 'checkpoint:save
+        {--comment= : Optional human-readable label saved as a .comment file}';
 
     protected $description = 'Save a full database checkpoint under .dev-checkpoint using a timestamped folder.';
 
@@ -20,7 +21,7 @@ class CheckpointSave extends Command
     public function handle(): int
     {
         try {
-            $checkpoint = $this->checkpointService->save();
+            $checkpoint = $this->checkpointService->save($this->option('comment'));
         } catch (Throwable $throwable) {
             $this->error('Checkpoint save failed: '.$throwable->getMessage());
 
@@ -30,6 +31,9 @@ class CheckpointSave extends Command
         $sizeInMb = round($checkpoint['size_bytes'] / 1024 / 1024, 2);
 
         $this->info("Checkpoint [{$checkpoint['name']}] saved successfully.");
+        if (($checkpoint['comment'] ?? null) !== null) {
+            $this->line("Comment: {$checkpoint['comment']}");
+        }
         $this->line("Path: {$checkpoint['path']}");
         $this->line("Artifact: {$checkpoint['artifact']}");
         $this->line("Size: {$sizeInMb} MB");
