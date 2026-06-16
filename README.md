@@ -1,5 +1,7 @@
 # laravel-checkpoint
 
+![Laravel Checkpoint banner](./image.png)
+
 Simple Laravel development checkpoints for your database and local storage disks.
 
 ## Why use it?
